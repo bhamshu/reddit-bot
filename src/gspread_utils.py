@@ -1,7 +1,12 @@
 import gspread
+import os
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+parent_dir = os.path.abspath(os.path.join(dir_path, os.pardir))
+service_account_path = os.path.join(parent_dir, 'service_account.json')
 
 def init_sheet(sheet_name):
-    gc = gspread.service_account()
+    gc = gspread.service_account(filename=service_account_path)
     sh = gc.open(sheet_name)
     return sh
 
