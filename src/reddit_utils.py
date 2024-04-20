@@ -16,8 +16,11 @@ from src.gspread_utils import fetch_column_from_sheet, init_keywords_worksheet, 
 from tag_generation_openai.main import generate_response
 from concurrent.futures import ThreadPoolExecutor
 from aws.upload_to_s3 import upload_image_to_s3
+from db.db import create_app
 
 load_dotenv()
+
+app = create_app()
 
 REDDIT_CREDENTIALS = [
     {
@@ -39,13 +42,13 @@ def load_reddit_instance(creds):
     #     'http': creds['PROXY_URL'],
     #     'https': creds['PROXY_URL']
     # }
-    
     return praw.Reddit(
         client_id=creds['CLIENT_ID'],
         client_secret=creds['CLIENT_SECRET'],
         user_agent=creds['USER_AGENT'],
         username=creds['USERNAME'],
         password=creds['PASSWORD'],
+        ratelimit_seconds=600
         # requestor_kwargs={'session': session}
     )
 
@@ -117,52 +120,55 @@ def fetch_and_save_posts(save_data_to_db, creds=REDDIT_CREDENTIALS[0]):
 
 def reply_to_posts(creds=REDDIT_CREDENTIALS[0]):
     """Generate and post replies to fetched posts from the database that haven't been replied to yet, with dynamic rate limiting."""
-    reddit = load_reddit_instance(creds)
-    
-    # Initial rate limit setup
-    base_delay = 120  # 2 minutes
+    with app.app_context():
+        reddit = load_reddit_instance(creds)
+        
+        # Initial rate limit setup
+        # base_delay = 120  # 2 minutes
 
-    posts = fetch_unreplied_posts_sorted()
-    
-    for post in posts:
-        if not post.replied:  # Double-checking the flag
-            submission = reddit.submission(id=post.post_id)
-            response_text = post.reply
-            if response_text:
-                try:
-                    submission.reply(response_text)
-                    print(f"Replied to post {post.post_id} with {response_text}")
+        posts = fetch_unreplied_posts_sorted()
+        
+        for post in posts:
+            if not post.replied:  # Double-checking the flag
+                submission = reddit.submission(id=post.post_id)
+                response_text = post.reply
+                if response_text:
+                    try:
+                        submission.reply(response_text)
+                        print(f"Replied to post {post.post_id} with {response_text}")
 
-                    # Update Database
-                    if update_post_replied_status(post.post_id, True):
-                        print(f"Database updated for post {post.post_id}")
+                        # Update Database
+                        if update_post_replied_status(post.post_id, True):
+                            print(f"Database updated for post {post.post_id}")
 
-                except Exception as e:
-                    if "RATELIMIT" in str(e):
-                        match = re.search(r'\b(\d+)\sminutes\b', str(e))
-                        if match:
-                            minutes = int(match.group(1))
-                            base_delay = minutes * 60
-                            print(f"Rate limit exceeded. Adjusting rate limit to {minutes} minutes.")
+                    except Exception as e:
+                        if "RATELIMIT" in str(e):
+                            match = re.search(r'\b(\d+)\sminutes\b', str(e))
+                            if match:
+                                minutes = int(match.group(1))
+                                # base_delay = minutes * 60
+                                print(e)
+                                print(f"Rate limit exceeded. Adjusting rate limit to {minutes} minutes.")
+                            else:
+                                # base_delay = 180  # Default to 9 minutes
+                                print(e)
+                                print("Rate limit exceeded. Adjusting rate limit to 3 minutes.")
+
+                            # Randomize delay within a 0 to 120 seconds range for RATELIMIT error
+                            random_variation = random.randint(0, 120)
+                            delay =  random_variation
+                            time.sleep(delay)
+                            print(f"Waiting for {delay} seconds before retrying the same operation.")
+                            continue  # Retry the same post after waiting
+                            
                         else:
-                            base_delay = 540  # Default to 9 minutes
-                            print("Rate limit exceeded. Adjusting rate limit to 9 minutes.")
+                            print(f"Failed to reply to post {post.post_id}: {e}")
+                            continue  # Skip to the next post for all other types of exceptions
 
-                        # Randomize delay within a 0 to 120 seconds range for RATELIMIT error
-                        random_variation = random.randint(0, 120)
-                        delay = base_delay + random_variation
-                        time.sleep(delay)
-                        print(f"Waiting for {delay} seconds before retrying the same operation.")
-                        continue  # Retry the same post after waiting
-                        
-                    else:
-                        print(f"Failed to reply to post {post.post_id}: {e}")
-                        continue  # Skip to the next post for all other types of exceptions
-
-    # Restore the rate limit after about an hour of execution
-    time.sleep(3600)  # Wait for an hour
-    base_delay = 120  # Reset to 2 minutes
-    print("Restored base delay to 2 minutes.")
+        # Restore the rate limit after about an hour of execution
+        time.sleep(120)  # Wait for an hour
+        # base_delay = 120  # Reset to 2 minutes
+        print("Restored base delay to 2 minutes.")
 
 @lru_cache(maxsize=128)
 def fetch_subreddits():
