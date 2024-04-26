@@ -55,7 +55,6 @@ def load_reddit_instance(creds):
 def fetch_and_save_posts(save_data_to_db, creds=REDDIT_CREDENTIALS[0]):
     reddit = load_reddit_instance(creds)
     subreddit_names = fetch_subreddits()
-    
     subreddit = reddit.subreddit(subreddit_names)
     for submission in subreddit.stream.submissions():
         try:
@@ -76,7 +75,10 @@ def fetch_and_save_posts(save_data_to_db, creds=REDDIT_CREDENTIALS[0]):
             id_of_content = format_title(response_dict['title'])
             from image_generation.image import create_decorated_image
             image = create_decorated_image(response_dict['title'], response_dict['content'], response_dict['quote'], response_dict['bg_color'], response_dict['color'])
+            from image_generation.image import create_title_image
+            og_image = create_title_image(response_dict['title'], response_dict['bg_color'], response_dict['color'])
             upload_image_to_s3(image, id_of_content, "reddit-calmclove")
+            upload_image_to_s3(og_image, id_of_content+"-og", "reddit-calmclove")
             
             reply = format_content_link_in_reply(response_dict["reply"], id_of_content, response_dict["title"])
 

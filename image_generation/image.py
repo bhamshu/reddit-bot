@@ -82,6 +82,62 @@ def create_decorated_image(title, text, quote, bg_color, text_color, filename='d
 
     return filename
 
+def create_title_image(title, bg_color, text_color, filename='title_image.png'):
+
+    bg_rgb = hex_to_rgb(bg_color)
+    text_rgb = hex_to_rgb(text_color)
+
+    # Initialize the dimensions for the image
+    img_width, img_height = 1200, 630
+
+    # Create an image with the specified background color
+    img = Image.new('RGB', (img_width, img_height), color=bg_rgb)
+    draw = ImageDraw.Draw(img)
+
+    # Define font path and load font
+    font_path = "image_generation/fonts/uni-sans/Uni-Sans-Heavy.otf"
+
+     # Load and measure the logo
+    logo = Image.open("image_generation/calmclovecom_logo.png")
+    logo_width, logo_height = logo.size
+    logo_x = (img_width - logo_width) // 2
+    logo_y = 50  # Set top margin for logo
+    img.paste(logo, (logo_x, logo_y), logo)  # Assume logo has transparency
+
+    try:
+        title_font = ImageFont.truetype(font_path, 80)  # Adjust font size as needed
+    except Exception as e:
+        print(f"An error occurred while loading the font: {e}")
+        title_font = ImageFont.load_default()
+
+ 
+    # Calculate the average width of a character
+    # We will use a sample text to approximate the average character width.
+    sample_text = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    total_width, _ = draw.textbbox((0, 0), sample_text, font=title_font)[2:]
+    average_char_width = total_width / len(sample_text)
+    
+    max_chars_per_line = int(img_width / average_char_width)  # Calculate max number of characters per line
+
+    # Measure and layout title
+    wrapped_title = textwrap.wrap(title, width=max_chars_per_line)  # Adjust wrap width dynamically
+    total_text_height = sum(draw.textbbox((0, 0), line, font=title_font)[3] for line in wrapped_title) + 10 * (len(wrapped_title) - 1)
+    current_y = logo_y + logo_height + 10  # Gap between logo and title
+    current_y += (img_height - current_y - total_text_height) // 2  # Center title vertically below the logo
+
+    # Draw title centered in the image
+    for line in wrapped_title:
+        _, _, line_width, line_height = draw.textbbox((0, 0), line, font=title_font)
+        line_x = (img_width - line_width) / 2
+        draw.text((line_x, current_y), line, font=title_font, fill=text_rgb)
+        current_y += line_height + 10  # Add space between lines
+
+    # Save the image
+    img.save(filename)
+    print(f"Image saved as {filename}")
+
+    return filename
+
 # Function to convert hex color code to RGB tuple
 def hex_to_rgb(hex_code):
     # Remove '#' if present and convert hex code to RGB
@@ -90,9 +146,9 @@ def hex_to_rgb(hex_code):
     return rgb
 
 # Example text to include in the image
-text = "Personal growth often involves respecting our own boundaries. It seems like honesty and open communication are crucial in this situation, even if it involves difficult conversations. Finding a middle ground that respects both your partner's wishes and your comfort is essential."
+text = "Personal growth."
 
 # Example usage with specified background and text colors
-bg_color = '#F0EAD6'   # Light Blue
-text_color = '#635F6D'  # Black
-create_decorated_image(title="Navigating Name Dilemma",text=text, bg_color=bg_color, text_color=text_color, quote="Honesty is the cornerstone of authentic relationships.")
+bg_color = '#F0EAF6'   # Light Blue
+text_color = '#000000'  # Black
+create_title_image(title="Navigating Name Dilemma", text_color=text_color, bg_color=bg_color)
